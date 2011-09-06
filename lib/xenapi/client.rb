@@ -198,95 +198,95 @@ module XenApi #:nodoc:
       @api_version = nil
     end
 
-    protected
-      # @param [String,Symbol] meth API method to call
-      # @param [Array] args Arguments to pass to the method call
-      # @raise [SessionInvalid] Reauthentication failed
-      # @raise [LoginRequired] Authentication required, unable to login automatically
-      # @raise [EOFError] XMLRPC::Client exception
-      # @raise [Errno::EPIPE] XMLRPC::Client exception
-      def _call(meth, *args)
-        begin
-          _do_call(meth, args.dup.unshift(@session))
-        rescue SessionInvalid
-          _relogin_attempts = (_relogin_attempts || 0) + 1
-          _relogin
-          retry unless _relogin_attempts > 2
-          raise
-        rescue EOFError
-          _eof_retries = (_eof_retries || 0) + 1
-          @client = nil
-          retry unless _eof_retries > 1
-          raise
-        rescue Errno::EPIPE
-          _epipe_retries = (_epipe_retries || 0) + 1
-          @client = nil
-          retry unless _epipe_retries > 1
-          raise
-        end
+  protected
+    # @param [String,Symbol] meth API method to call
+    # @param [Array] args Arguments to pass to the method call
+    # @raise [SessionInvalid] Reauthentication failed
+    # @raise [LoginRequired] Authentication required, unable to login automatically
+    # @raise [EOFError] XMLRPC::Client exception
+    # @raise [Errno::EPIPE] XMLRPC::Client exception
+    def _call(meth, *args)
+      begin
+        _do_call(meth, args.dup.unshift(@session))
+      rescue SessionInvalid
+        _relogin_attempts = (_relogin_attempts || 0) + 1
+        _relogin
+        retry unless _relogin_attempts > 2
+        raise
+      rescue EOFError
+        _eof_retries = (_eof_retries || 0) + 1
+        @client = nil
+        retry unless _eof_retries > 1
+        raise
+      rescue Errno::EPIPE
+        _epipe_retries = (_epipe_retries || 0) + 1
+        @client = nil
+        retry unless _epipe_retries > 1
+        raise
       end
-    private
-      # Reauthenticate with the API
-      # @raise [LoginRequired] Missing authentication credentials
-      def _relogin
-        raise LoginRequired if @login_meth.nil? || @login_args.nil? || @login_args.empty?
-        _login(@login_meth, *@login_args)
+    end
+  private
+    # Reauthenticate with the API
+    # @raise [LoginRequired] Missing authentication credentials
+    def _relogin
+      raise LoginRequired if @login_meth.nil? || @login_args.nil? || @login_args.empty?
+      _login(@login_meth, *@login_args)
+    end
+
+    # Login to the API
+    #
+    # @note Will call the +after_login+ block if login is successful
+    #
+    # @param [String,Symbol] meth Login method name
+    # @param [...] args Arguments to pass to the login method
+    # @return [Boolean] true
+    # @raise [Exception] any exception raised by +_do_call+ or +after_login+
+    def _login(meth, *args)
+      begin
+        @session = _do_call("session.#{meth}", args)
+        @login_meth = meth
+        @login_args = args
+        after_login
+        true
+      rescue Exception => e
+        raise e
       end
+    end
 
-      # Login to the API
-      #
-      # @note Will call the +after_login+ block if login is successful
-      #
-      # @param [String,Symbol] meth Login method name
-      # @param [...] args Arguments to pass to the login method
-      # @return [Boolean] true
-      # @raise [Exception] any exception raised by +_do_call+ or +after_login+
-      def _login(meth, *args)
-        begin
-          @session = _do_call("session.#{meth}", args)
-          @login_meth = meth
-          @login_args = args
-          after_login
-          true
-        rescue Exception => e
-          raise e
-        end
+    # Return or initialize new +XMLRPC::Client+
+    #
+    # @return [XMLRPC::Client] XMLRPC client instance
+    def _client
+      @client ||= XMLRPC::Client.new(@uri.host, @uri.path, @uri.port, nil, nil, nil, nil, @uri.port == 443, @timeout)
+    end
+
+    # Perform XMLRPC method call.
+    #
+    # @param [String,Symbol] meth XMLRPC method to call
+    # @param [Array] args XMLRPC method arguments
+    # @param [Integer] attempts Number of times to retry the call, presently unused
+    # @return [Object] method return value
+    # @raise [ResponseMissingStatusField] XMLRPC response does not have a +Status+ field
+    # @raise [ResponseMissingValueField] XMLRPC response does not have a +Value+ field
+    # @raise [ResponseMissingErrorDescriptionField] API response error missing +ErrorDescription+ field
+    # @raise [SessionInvalid] API session has expired
+    # @raise [Errors::GenericError] API method specific error
+    def _do_call(meth, args, attempts = 3)
+      r = _client.call(meth, *args)
+      raise ResponseMissingStatusField unless r.has_key?('Status')
+
+      if r['Status'] == 'Success'
+        return r['Value'] if r.has_key?('Value')
+        raise ResponseMissingValueField
+      else
+        raise ResponseMissingErrorDescriptionField unless r.has_key?('ErrorDescription')
+        raise SessionInvalid if r['ErrorDescription'][0] == 'SESSION_INVALID'
+
+        ed = r['ErrorDescription'].shift
+        ex = Errors.exception_class_from_desc(ed)
+        r['ErrorDescription'].unshift(ed) if ex == Errors::GenericError
+        raise ex, r['ErrorDescription']
       end
-
-      # Return or initialize new +XMLRPC::Client+
-      #
-      # @return [XMLRPC::Client] XMLRPC client instance
-      def _client
-        @client ||= XMLRPC::Client.new(@uri.host, @uri.path, @uri.port, nil, nil, nil, nil, @uri.port == 443, @timeout)
-      end
-
-      # Perform XMLRPC method call.
-      #
-      # @param [String,Symbol] meth XMLRPC method to call
-      # @param [Array] args XMLRPC method arguments
-      # @param [Integer] attempts Number of times to retry the call, presently unused
-      # @return [Object] method return value
-      # @raise [ResponseMissingStatusField] XMLRPC response does not have a +Status+ field
-      # @raise [ResponseMissingValueField] XMLRPC response does not have a +Value+ field
-      # @raise [ResponseMissingErrorDescriptionField] API response error missing +ErrorDescription+ field
-      # @raise [SessionInvalid] API session has expired
-      # @raise [Errors::GenericError] API method specific error
-      def _do_call(meth, args, attempts = 3)
-        r = _client.call(meth, *args)
-        raise ResponseMissingStatusField unless r.has_key?('Status')
-
-        if r['Status'] == 'Success'
-          return r['Value'] if r.has_key?('Value')
-          raise ResponseMissingValueField
-        else
-          raise ResponseMissingErrorDescriptionField unless r.has_key?('ErrorDescription')
-          raise SessionInvalid if r['ErrorDescription'][0] == 'SESSION_INVALID'
-
-          ed = r['ErrorDescription'].shift
-          ex = Errors.exception_class_from_desc(ed)
-          r['ErrorDescription'].unshift(ed) if ex == Errors::GenericError
-          raise ex, r['ErrorDescription']
-        end
-      end
+    end
   end
 end
