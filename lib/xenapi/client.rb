@@ -132,6 +132,19 @@ module XenApi #:nodoc:
       @session
     end
 
+    # Returns the current API version
+    #
+    # @return [String] API version
+    def api_version
+      @api_version ||= begin
+        pool = self.pool.get_all()[0]
+        host = self.pool.get_master(pool)
+        major = self.host.get_API_version_major(host)
+        minor = self.host.get_API_version_minor(host)
+        "#{major}.#{minor}"
+      end
+    end
+
     # Handle API method calls.
     #
     # If the method called starts with +login+ then the method is
@@ -168,6 +181,23 @@ module XenApi #:nodoc:
         Dispatcher.new(self, meth, :_call)
       end
     end
+
+    # Logout and destroy the current session. After calling logout, the
+    # object state is invalid. No API calls can be performed unless one of
+    # the login methods is called again.
+    def logout
+      if @login_meth.to_s.start_with? "slave_local"
+        _do_call("session.local_logout", [@session])
+      else
+        _do_call("session.logout", [@session])
+      end
+
+      @session = ""
+      @login_meth = nil
+      @login_args = []
+      @api_version = nil
+    end
+
     protected
       # @param [String,Symbol] meth API method to call
       # @param [Array] args Arguments to pass to the method call
@@ -255,7 +285,7 @@ module XenApi #:nodoc:
           ed = r['ErrorDescription'].shift
           ex = Errors.exception_class_from_desc(ed)
           r['ErrorDescription'].unshift(ed) if ex == Errors::GenericError
-          raise ex, r['ErrorDescription'].inspect
+          raise ex, r['ErrorDescription']
         end
       end
   end

@@ -1,7 +1,16 @@
 module XenApi #:nodoc:
   module Errors #:nodoc:
     # Generic errror case, all XenApi exceptions inherit from this for ease of catching
-    class GenericError < RuntimeError; end
+    class GenericError < RuntimeError;
+      # The raw error description according to the server, typically an array
+      attr_reader :description
+
+      def initialize(*args, &block)
+        @description = args[0]
+        args[0] = args[0].inspect unless args[0].is_a? String || args[0].nil?
+        super(*args, &block)
+      end
+    end
 
     # The bootloader returned an error.
     #
@@ -35,6 +44,13 @@ module XenApi #:nodoc:
     # Raised by
     # - VM.set_memory_static_max
     class HAOperationWouldBreakFailoverPlan < GenericError; end
+
+    # The host can not be used as it is not the pool master. The data
+    # contains the location of the current designated pool master.
+    #
+    # Raised by
+    # - sesssion.login_with_password
+    class HostIsSlave < GenericError; end
 
     # The host name is invalid
     #
@@ -369,6 +385,8 @@ module XenApi #:nodoc:
         EventsLost
       when 'HA_OPERATION_WOULD_BREAK_FAILOVER_PLAN'
         HAOperationWouldBreakFailoverPlan
+      when 'HOST_IS_SLAVE'
+        HostIsSlave
       when 'HOST_NAME_INVALID'
         HostNameInvalid
       when 'HOST_NOT_ENOUGH_FREE_MEMORY'
@@ -442,7 +460,7 @@ module XenApi #:nodoc:
       when 'VM_SNAPSHOT_WITH_QUIESCE_PLUGIN_DOES_NOT_RESPOND'
         VMSnapshotWithQuiescePluginDoesNotRespond
       when 'VM_SNAPSHOT_WITH_QUIESCE_TIMEOUT'
-        VMSnapshotWithQuiesceTimeout      
+        VMSnapshotWithQuiesceTimeout
       else
         GenericError
       end
