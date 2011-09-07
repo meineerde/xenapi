@@ -19,7 +19,7 @@ module XenApi
   # @return [Object] block return value
   # @raise [NoHostsAvailable] No hosts could be contacted
   def self.do(hosts, username, password, options={})
-    hosts = [hosts] unless hosts.respond_to? :shift
+    hosts = hosts.respond_to?(:shift) ? hosts.dup : [hosts]
     method = options[:slave_login] ? :slave_local_login_with_password : :login_with_password
 
     until hosts.empty?
