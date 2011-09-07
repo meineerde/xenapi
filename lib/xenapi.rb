@@ -6,7 +6,9 @@ module XenApi
 
   # Perform some action in a session context
   #
-  # @param [String,Array] hosts Host or hosts to try to connect to
+  # @param [String,Array] hosts
+  #   Host or hosts to try to connect to. Pass multiple URLs to allow to find
+  #   the pool master even if the originally designated host is not reachable.
   # @param [String] username Username used for login
   # @param [String] password Password used for login
   # @param [Hash(Symbol => Boolean, String)] options

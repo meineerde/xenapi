@@ -6,15 +6,40 @@ Xen API XMLRPC Client library for working with XenServers
 
 In this quick example we connect, login and invoke an API method.
 
+  require 'xenapi'
   client = XenApi::Client.new('http://xenapi.test')
   client.login_with_password('root', 'password')
   client.VM.get_all
 
+Another variant for connecting and using the API is the block-based method.
+
+  require 'xenapi'
+  XenApi.connect(['http://xenapi.test'], 'root', 'password') do |client|
+    vms = client.VM.get_all
+    vms.each do |vm|
+      record = client.VM.get_record(vm)
+      unless record['is_a_template'] || record['is_control_domain']
+        name = record['name_label']
+        puts "Found VM uuid #{record['uuid']} called #{name}"
+      end
+    end
+  end
+
 This will likely be enough information to get you on your feet with
-the API, for more details see {XenApi::Client}.
+the API, for more details see {XenApi::Client} and the API documentation of Citrix.
+
+* API Documentation: http://docs.vmd.citrix.com/XenServer/5.6.0sp2/1.0/en_gb/api/
+* Other SDK variants: http://community.citrix.com/display/xs/Download+SDKs
+
+== Restrictions
+
+* The xmlrpc library as well as net/http of Ruby do not support unix domain
+  sockets by default. Susequently this library supports only the HTTP and HTTS
+  transports.
+* SSL certificates are currently not checked.
 
 == Note on Patches/Pull Requests
- 
+
 * Fork the project.
 * Make your feature addition or bug fix.
 * Add tests for it. This is important so I don't break it in a

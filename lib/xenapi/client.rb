@@ -47,12 +47,22 @@ module XenApi #:nodoc:
   #
   #   client = XenApi::Client.new('http://xenapi.test')
   #   client.login_with_password('root', 'password')
-  #   client.Async.VM.get_all
-  #   client.async.VM.get_all
+  #
+  #   vm_ref = client.VM.get_by_name_label('my vm')
+  #   task = client.Async.VM.clone(vm_ref)
+  #   while client.Task.get_status(task) == "pending":
+  #        progress = client.Task.get_progress(task)
+  #        update_progress_bar(progress)
+  #        time.sleep(1)
+  #   client.Task.destroy(task)
   #
   # Calling either +Async+ or +async+ will work as the
   # capitalised form will always be sent when calling
   # a method asynchronously.
+  #
+  # Note that only some methods are available in an asynchronous variant.
+  # An XMLRPC::FaultException is thrown if you try to call a method
+  # asynchrounously that is not available.
   class Client
     # The +LoginRequired+ exception is raised when
     # an API request requires login and no login
@@ -187,9 +197,9 @@ module XenApi #:nodoc:
     # the login methods is called again.
     def logout
       if @login_meth.to_s.start_with? "slave_local"
-        _do_call("session.local_logout", [@session])
+        _call("session.local_logout")
       else
-        _do_call("session.logout", [@session])
+        _call("session.logout")
       end
 
       @session = ""
