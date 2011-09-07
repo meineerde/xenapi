@@ -18,7 +18,7 @@ module XenApi
   # @yieldparam [Client] client Client instance
   # @return [Object] block return value
   # @raise [NoHostsAvailable] No hosts could be contacted
-  def self.do(hosts, username, password, options={})
+  def self.connect(hosts, username, password, options={})
     hosts = hosts.respond_to?(:shift) ? hosts.dup : [hosts]
     method = options[:slave_login] ? :slave_local_login_with_password : :login_with_password
 
@@ -37,7 +37,12 @@ module XenApi
           client = Client.new(uri.to_s)
           retry
         end
-        return yield client
+        if block_given?
+          return yield client
+        else
+          options[:keep_session] = true
+          return client
+        end
       ensure
         client.logout unless options[:keep_session] || client.xenapi_session.nil?
       end
