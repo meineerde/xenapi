@@ -196,16 +196,18 @@ module XenApi #:nodoc:
     # object state is invalid. No API calls can be performed unless one of
     # the login methods is called again.
     def logout
-      if @login_meth.to_s.start_with? "slave_local"
-        _call("session.local_logout")
-      else
-        _call("session.logout")
+      begin
+        if @login_meth.to_s.start_with? "slave_local"
+          _call("session.local_logout")
+        else
+          _call("session.logout")
+        end
+      ensure
+        @session = ""
+        @login_meth = nil
+        @login_args = []
+        @api_version = nil
       end
-
-      @session = ""
-      @login_meth = nil
-      @login_args = []
-      @api_version = nil
     end
 
   protected
