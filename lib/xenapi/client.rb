@@ -198,9 +198,9 @@ module XenApi #:nodoc:
     def logout
       begin
         if @login_meth.to_s.start_with? "slave_local"
-          _call("session.local_logout")
+          _do_call("session.local_logout", [@session])
         else
-          _call("session.logout")
+          _do_call("session.logout", [@session])
         end
       ensure
         @session = ""
