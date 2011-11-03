@@ -183,7 +183,7 @@ module XenApi #:nodoc:
     # @return [true,AsyncDispatcher,Dispatcher]
     def method_missing(meth, *args)
       case meth.to_s
-      when /^login/
+      when /^(slave_local_)?login/
         _login(meth, *args)
       when /^async/i
         AsyncDispatcher.new(self, :_call)
