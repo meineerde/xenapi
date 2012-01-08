@@ -111,6 +111,8 @@ module XenApi #:nodoc:
       @uri.path = '/' if @uri.path == ''
     end
 
+    attr_reader :uri
+
     # @overload after_login
     #   Adds a block to be called after successful login to the XenAPI.
     #   @note The block will be called whenever the receiver has to authenticate
