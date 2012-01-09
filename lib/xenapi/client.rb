@@ -105,13 +105,17 @@ module XenApi #:nodoc:
 
     # @param [String] uri URL to the Xen API endpoint
     # @param [Integer] timeout Maximum number of seconds to wait for an API response
-    def initialize(uri, timeout = 10)
+    def initialize(uris, timeout = 10)
       @timeout = timeout
-      @uri = URI.parse(uri)
-      @uri.path = '/' if @uri.path == ''
+      @uris = [uris].flatten.collect do |uri|
+        uri = URI.parse(uri)
+        uri.path = '/' if uri.path == ''
+        uri
+      end
+      @uri = @uris.first
     end
 
-    attr_reader :uri
+    attr_reader :uri, :uris
 
     # @overload after_login
     #   Adds a block to be called after successful login to the XenAPI.
@@ -132,6 +136,29 @@ module XenApi #:nodoc:
           @after_login.call(self)
         else
           @after_login.call
+        end
+      end
+      self
+    end
+
+    # @overload before_reconnect
+    #   Adds a block to be called before an attempted reconnect to another server.
+    #   @note The block will be called whenever the receiver has to chose a
+    #     new server because the current connection got invalid.
+    #   @yield client
+    #   @yieldparam [optional, Client] client Client instance
+    # @overload before_reconnect
+    #   Calls the created block, this is primarily for internal use only
+    # @return [Client] receiver
+    def before_reconnect(&block)
+      if block
+        @before_reconnect = block
+      elsif @before_reconnect
+        case @before_reconnect.arity
+        when 1
+          @before_reconnect.call(self)
+        else
+          @before_reconnect.call
         end
       end
       self
@@ -229,17 +256,31 @@ module XenApi #:nodoc:
         _relogin_attempts = (_relogin_attempts || 0) + 1
         _relogin
         retry unless _relogin_attempts > 2
-        raise
+        _reconnect ? retry : raise
+      rescue Timeout::Error
+        _timeout_retries = (_timeout_retries || 0) + 1
+        @client = nil
+        retry unless _timeout_retries > 1
+        _reconnect ? retry : raise
+      rescue Errors::HostIsSlave => e
+        # should only occur on login
+        uri = @uri.dup
+        uri.hostname = e.description[0]
+        @uris.unshift(uri)
+        _reconnect ? retry : raise
       rescue EOFError
         _eof_retries = (_eof_retries || 0) + 1
         @client = nil
         retry unless _eof_retries > 1
-        raise
+        _reconnect ? retry : raise
       rescue Errno::EPIPE
         _epipe_retries = (_epipe_retries || 0) + 1
         @client = nil
         retry unless _epipe_retries > 1
-        raise
+        _reconnect ? retry : raise
+      rescue Errno::EHOSTUNREACH
+        @client = nil
+        _reconnect ? retry : raise
       end
     end
   private
@@ -248,6 +289,32 @@ module XenApi #:nodoc:
     def _relogin
       raise LoginRequired if @login_meth.nil? || @login_args.nil? || @login_args.empty?
       _login(@login_meth, *@login_args)
+    end
+
+    # Try to reconnect to another available server in the same pool
+    # @raise [Errors::NoHostsAvailable] No further hosts available to connect to
+    # @raise [LoginRequired] Missing authentication credentials
+    def _reconnect
+      return false if @i_am_reconnecting
+
+      @i_am_reconnecting = true
+      failed_uris = [@uri]
+      while (available_uris = (@uris - failed_uris)).count > 0
+        @uri = available_uris[0]
+        @client = nil
+
+        begin
+          before_reconnect
+          _relogin
+          @i_am_reconnecting = false
+          return true
+        rescue LoginRequired
+          raise
+        rescue
+          failed_uris << @uri
+        end
+      end
+      raise Errors::NoHostsAvailable.new("No server reachable. Giving up.")
     end
 
     # Login to the API

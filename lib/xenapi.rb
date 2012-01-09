@@ -20,36 +20,25 @@ module XenApi
   # @yieldparam [Client] client Client instance
   # @return [Object] block return value
   # @raise [NoHostsAvailable] No hosts could be contacted
-  def self.connect(hosts, username, password, options={})
-    hosts = hosts.respond_to?(:shift) ? hosts.dup : [hosts]
+  def self.connect(uris, username, password, options={})
+    uris = uris.respond_to?(:shift) ? uris.dup : [uris]
     method = options[:slave_login] ? :slave_local_login_with_password : :login_with_password
 
-    until hosts.empty?
-      client = Client.new(hosts.shift)
-      begin
-        begin
-          args = [method, username, password]
-          args << options[:api_version] if options.has_key?(:api_version)
-          client.send(*args)
-        rescue Timeout::Error
-          next
-        rescue Errors::HostIsSlave => e
-          uri = URI.parse(host)
-          uri.hostname = e.description[0]
-          client = Client.new(uri.to_s)
-          retry
-        end
-        if block_given?
-          return yield client
-        else
-          options[:keep_session] = true
-          return client
-        end
-      ensure
-        client.logout unless options[:keep_session] || client.xenapi_session.nil?
+    client = Client.new(uris)
+    begin
+      args = [method, username, password]
+      args << options[:api_version] if options.has_key?(:api_version)
+      client.send(*args)
+
+      if block_given?
+        return yield client
+      else
+        options[:keep_session] = true
+        return client
       end
+    ensure
+      client.logout unless options[:keep_session] || client.xenapi_session.nil?
     end
-    raise Errors::NoHostsAvailable.new("No server reachable. Giving up.")
   end
 end
 
