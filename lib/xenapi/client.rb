@@ -111,7 +111,7 @@ module XenApi #:nodoc:
         uri = URI.parse(uri)
         uri.path = '/' if uri.path == ''
         uri
-      end
+      end.uniq
       @uri = @uris.first
     end
 
@@ -262,12 +262,6 @@ module XenApi #:nodoc:
         @client = nil
         retry unless _timeout_retries > 1
         _reconnect ? retry : raise
-      rescue Errors::HostIsSlave => e
-        # should only occur on login
-        uri = @uri.dup
-        uri.hostname = e.description[0]
-        @uris.unshift(uri)
-        _reconnect ? retry : raise
       rescue EOFError
         _eof_retries = (_eof_retries || 0) + 1
         @client = nil
@@ -332,13 +326,18 @@ module XenApi #:nodoc:
     def _login(meth, *args)
       begin
         @session = _do_call("session.#{meth}", args)
-        @login_meth = meth
-        @login_args = args
-        after_login
-        true
-      rescue
-        raise
+      rescue Errors::HostIsSlave => e
+        @uri = @uri.dup
+        @uri.host = e.description[0]
+        @uris.unshift(@uri).uniq!
+        @client = nil
+        retry
       end
+
+      @login_meth = meth
+      @login_args = args
+      after_login
+      true
     end
 
     # Return or initialize new +XMLRPC::Client+
