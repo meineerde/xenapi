@@ -283,6 +283,7 @@ module XenApi #:nodoc:
         _reconnect ? retry : raise
       end
     end
+
   private
     # Reauthenticate with the API
     # @raise [LoginRequired] Missing authentication credentials
@@ -292,6 +293,9 @@ module XenApi #:nodoc:
     end
 
     # Try to reconnect to another available server in the same pool
+    #
+    # @note Will call the +before_reconnect+ block before trying to reconnect
+    #
     # @raise [Errors::NoHostsAvailable] No further hosts available to connect to
     # @raise [LoginRequired] Missing authentication credentials
     def _reconnect
