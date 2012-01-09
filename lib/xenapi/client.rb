@@ -204,6 +204,9 @@ module XenApi #:nodoc:
         else
           _do_call("session.logout", [@session])
         end
+      rescue
+        # We don't care about any error. If it works: great, if not: shit happens...
+        nil
       ensure
         @session = ""
         @login_meth = nil
