@@ -265,8 +265,8 @@ module XenApi #:nodoc:
         @login_args = args
         after_login
         true
-      rescue Exception => e
-        raise e
+      rescue
+        raise
       end
     end
 
