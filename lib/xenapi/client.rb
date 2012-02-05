@@ -103,10 +103,13 @@ module XenApi #:nodoc:
       "#<#{self.class} #{@uri}>"
     end
 
-    # @param [String] uri URL to the Xen API endpoint
+    # @param [String,Array] uri URL to the Xen API endpoint
     # @param [Integer] timeout Maximum number of seconds to wait for an API response
-    def initialize(uris, timeout = 10)
+    # @param [Symbol] ssl_verify SSL certificate verification mode.
+    #   Can be one of :verify_none or :verify_peer
+    def initialize(uris, timeout=10, ssl_verify=:verify_peer)
       @timeout = timeout
+      @ssl_verify = ssl_verify
       @uris = [uris].flatten.collect do |uri|
         uri = URI.parse(uri)
         uri.path = '/' if uri.path == ''
@@ -344,7 +347,7 @@ module XenApi #:nodoc:
     #
     # @return [XMLRPC::Client] XMLRPC client instance
     def _client
-      @client ||= XMLRPC::Client.new(@uri.host, @uri.path, @uri.port, nil, nil, nil, nil, @uri.port == 443, @timeout)
+      @client ||= XMLRPCClient.new(@uri.host, @uri.path, @uri.port, nil, nil, nil, nil, @uri.scheme == "https" ? @ssl_verify : false, @timeout)
     end
 
     # Perform XMLRPC method call.
